@@ -1,134 +1,312 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import {App, requestUrl, Editor, moment, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
-interface MyPluginSettings {
-	mySetting: string;
+interface OnThisDayPluginSettings {
+    accessToken: string;
+    amountOfEvents: number;
+    insertTitle: boolean;
+    titleDateFormat: string;
+    categories: {
+        selected: boolean;
+        births: boolean;
+        deaths: boolean;
+        events: boolean;
+    }
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+type Category = "selected" | "births" | "deaths" | "events";
+
+interface OnThisDayItem {
+    text: string;
+    year: number;
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
-
-	async onload() {
-		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
-
-	onunload() {
-
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
+interface OnThisDayResponse {
+    selected: Array<OnThisDayItem>;
+    births: Array<OnThisDayItem>;
+    deaths: Array<OnThisDayItem>;
+    events: Array<OnThisDayItem>;
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
+const DEFAULT_SETTINGS: OnThisDayPluginSettings = {
+    accessToken: "",
+    amountOfEvents: 1,
+    insertTitle: true,
+    titleDateFormat: "MMMM Do",
+    categories: {
+        selected: true,
+        births: true,
+        deaths: true,
+        events: true
+    }
 }
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+export default class OnThisDayPlugin extends Plugin {
+    settings: OnThisDayPluginSettings;
+    onThisDayResponse: OnThisDayResponse = {} as OnThisDayResponse;
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
+    async onload() {
 
-	display(): void {
-		const {containerEl} = this;
+        await this.loadSettings();
 
-		containerEl.empty();
+        this.addSettingTab(new OnThisDaySettingsTab(this.app, this));
 
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
+        this.addCommand({
+            id: "insert-on-this-day-text-with-title",
+            name: "Insert",
+            editorCallback: async (editor: Editor) => {
+                await this.insert(editor, true);
+            },
+        });
+
+        this.addCommand({
+            id: "insert-on-this-day-text-without-title",
+            name: "Insert (without title)",
+            editorCallback: async (editor: Editor) => {
+                await this.insert(editor, false);
+            },
+        });
+
+        if (this.settings.accessToken) {
+            this.onThisDayResponse = await this.getOnThisDayResponse();
+        }
+
+    }
+
+    async insert(editor: Editor, withTitle: boolean = false){
+
+        if (!this.settings.accessToken) {
+            new Notice("Please set your access token in the settings.");
+            return;
+        }
+
+        // If the on this day response is empty, get it
+        if (Object.keys(this.onThisDayResponse).length === 0) {
+
+            this.onThisDayResponse = await this.getOnThisDayResponse();
+
+            // If it's still empty, return
+            if (Object.keys(this.onThisDayResponse).length === 0) {
+                new Notice("Error getting on this day text");
+                return;
+            }
+
+        }
+
+
+        // If a selection is made, replace it with the text
+        if (editor.somethingSelected()) {
+            editor.replaceSelection(this.getOnThisDayText(withTitle));
+            return;
+        }
+
+        editor.replaceRange(
+            this.getOnThisDayText(withTitle),
+            editor.getCursor()
+        );
+
+        editor.setCursor({line: editor.getCursor().line + 1, ch: 0});
+    }
+
+
+    getOnThisDayText(withTitle: boolean): string {
+
+        if (!this.onThisDayResponse) {
+            return "";
+        }
+
+        let text = "";
+
+        if (withTitle) {
+            text += `## On this day (${moment().format(this.settings.titleDateFormat)})\n\n`;
+        }
+
+        let eventsArray: Array<OnThisDayItem> = [];
+
+        // Fetch a random event from each category until we hit the amount of events we want
+        while (eventsArray.length < this.settings.amountOfEvents) {
+
+                let category: Category = Object.keys(this.onThisDayResponse)[Math.floor(Math.random() * Object.keys(this.onThisDayResponse).length)] as Category;
+
+                // If the category is not selected, skip it
+                if (!this.settings.categories[category]) {
+                    continue;
+                }
+
+                let event = this.onThisDayResponse[category][Math.floor(Math.random() * this.onThisDayResponse[category].length)];
+
+                // If the event is already in the array, skip it
+                if (eventsArray.includes(event)) {
+                    continue;
+                }
+
+                eventsArray.push(event);
+
+        }
+
+
+        // Sort the events by year
+        eventsArray.sort((a, b) => a.year - b.year);
+
+        // Add the events to the text
+        for (const event of eventsArray) {
+            text += `* ${event.text} (${event.year})\n`;
+        }
+
+        return text;
+
+
+    }
+
+    async getOnThisDayResponse(): Promise<OnThisDayResponse> {
+
+
+        if (!this.settings.accessToken) {
+            new Notice("Please set your access token in the settings.");
+            return {} as OnThisDayResponse;
+        }
+
+        let today = new Date();
+        let month = String(today.getMonth() + 1).padStart(2, '0');
+        let day = String(today.getDate()).padStart(2, '0');
+        let url = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/${month}/${day}`;
+
+        try {
+
+            let response = await requestUrl({
+                url: url,
+                headers: {
+                    'Api-User-Agent': 'on-this-day-obsidian-plugin (milanvanas+on-this-day-obsidian@gmail.com)',
+                    "Authorization": "Bearer " + this.settings.accessToken,
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                }
+
+            });
+
+            return response.json;
+
+        } catch (error) {
+            console.error(error);
+            return {} as OnThisDayResponse;
+        }
+
+
+    }
+
+    onunload() {
+
+    }
+
+    async loadSettings() {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    }
+
+    async saveSettings() {
+        await this.saveData(this.settings);
+    }
+}
+
+export class OnThisDaySettingsTab extends PluginSettingTab {
+    plugin: OnThisDayPlugin;
+
+    constructor(app: App, plugin: OnThisDayPlugin) {
+        super(app, plugin);
+        this.plugin = plugin;
+    }
+
+    display(): void {
+
+        let {containerEl} = this;
+
+        containerEl.empty();
+
+        new Setting(containerEl)
+            .setName("Wikimedia Access token")
+            .setDesc("Get your Access token from https://api.wikimedia.org/wiki/Special:AppManagement")
+            .addTextArea((text) =>
+                text
+                    .setPlaceholder("Your Access token")
+                    .setValue(this.plugin.settings.accessToken)
+                    .onChange(async (value) => {
+
+                        this.plugin.settings.accessToken = value;
+                        await this.plugin.saveSettings();
+
+                        if (value && Object.keys(this.plugin.onThisDayResponse).length === 0) {
+                            this.plugin.onThisDayResponse = await this.plugin.getOnThisDayResponse();
+                        }
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Amount of items")
+            .setDesc("The amount of items to insert")
+            .addText((text) =>
+                text
+                    .setPlaceholder("Amount of items")
+                    .setValue(this.plugin.settings.amountOfEvents.toString())
+                    .onChange(async (value) => {
+
+                        let parsedValue = parseInt(value);
+
+                        if (parsedValue < 1) {
+                            parsedValue = 1;
+                        }
+
+                        if (parsedValue > 30) {
+                            parsedValue = 30;
+                        }
+
+                        this.plugin.settings.amountOfEvents = parsedValue;
+
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Title date format")
+            .setDesc("The date format of the title")
+            .setClass('title-date-format-setting')
+            .addText((text) =>
+                text
+                    .setPlaceholder("Title date format (MMMM-Do)")
+                    .setValue(this.plugin.settings.titleDateFormat)
+                    .onChange(async (value) => {
+                        this.plugin.settings.titleDateFormat = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        // Dropdown for category
+        containerEl.createEl('h2', {text: 'Categories'});
+        containerEl.createEl('p', {text: 'Select the categories you want to include'});
+        const categories = ['Selected by Wikipedia', 'Births', 'Deaths', 'Events'];
+        const categorySettings = new Map<string, Setting>();
+
+        // @ts-ignore
+        for (const category: Category of categories) {
+            const setting = new Setting(containerEl)
+                .setName(category)
+                .addToggle((toggle) =>
+                    toggle
+                        .setValue(true)
+                        .onChange(async (value) => {
+
+                            // @ts-ignore
+                            this.plugin.settings.categories[category] = value;
+
+                            await this.plugin.saveSettings();
+
+                        })
+                );
+            categorySettings.set(category, setting);
+        }
+
+
+
+
+    }
 }
