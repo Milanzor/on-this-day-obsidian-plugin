@@ -1,4 +1,4 @@
-import {App, requestUrl, Editor, moment, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
+import {App, requestUrl, Editor, moment, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -7,44 +7,24 @@ interface OnThisDayPluginSettings {
     amountOfEvents: number;
     insertTitle: boolean;
     titleDateFormat: string;
-    categories: {
-        selected: boolean;
-        births: boolean;
-        deaths: boolean;
-        events: boolean;
-    }
 }
-
-type Category = "selected" | "births" | "deaths" | "events";
 
 interface OnThisDayItem {
-    text: string;
-    year: number;
-}
-
-interface OnThisDayResponse {
-    selected: Array<OnThisDayItem>;
-    births: Array<OnThisDayItem>;
-    deaths: Array<OnThisDayItem>;
-    events: Array<OnThisDayItem>;
+    eventdescription: string;
+    eventtype: string;
+    eventyear: number;
 }
 
 const DEFAULT_SETTINGS: OnThisDayPluginSettings = {
     accessToken: "",
     amountOfEvents: 1,
     insertTitle: true,
-    titleDateFormat: "MMMM Do",
-    categories: {
-        selected: true,
-        births: true,
-        deaths: true,
-        events: true
-    }
+    titleDateFormat: "MMMM Do"
 }
 
 export default class OnThisDayPlugin extends Plugin {
     settings: OnThisDayPluginSettings;
-    onThisDayResponse: OnThisDayResponse = {} as OnThisDayResponse;
+    onThisDayResponse: Array<OnThisDayItem> = [];
 
     async onload() {
 
@@ -68,18 +48,11 @@ export default class OnThisDayPlugin extends Plugin {
             },
         });
 
-        if (this.settings.accessToken) {
-            this.onThisDayResponse = await this.getOnThisDayResponse();
-        }
+        this.onThisDayResponse = await this.getOnThisDayResponse();
 
     }
 
-    async insert(editor: Editor, withTitle: boolean = false){
-
-        if (!this.settings.accessToken) {
-            new Notice("Please set your access token in the settings.");
-            return;
-        }
+    async insert(editor: Editor, withTitle = false) {
 
         // If the on this day response is empty, get it
         if (Object.keys(this.onThisDayResponse).length === 0) {
@@ -122,36 +95,14 @@ export default class OnThisDayPlugin extends Plugin {
             text += `## On this day (${moment().format(this.settings.titleDateFormat)})\n\n`;
         }
 
-        let eventsArray: Array<OnThisDayItem> = [];
-
-        // Fetch a random event from each category until we hit the amount of events we want
-        while (eventsArray.length < this.settings.amountOfEvents) {
-
-                let category: Category = Object.keys(this.onThisDayResponse)[Math.floor(Math.random() * Object.keys(this.onThisDayResponse).length)] as Category;
-
-                // If the category is not selected, skip it
-                if (!this.settings.categories[category]) {
-                    continue;
-                }
-
-                let event = this.onThisDayResponse[category][Math.floor(Math.random() * this.onThisDayResponse[category].length)];
-
-                // If the event is already in the array, skip it
-                if (eventsArray.includes(event)) {
-                    continue;
-                }
-
-                eventsArray.push(event);
-
-        }
-
-
-        // Sort the events by year
-        eventsArray.sort((a, b) => a.year - b.year);
-
         // Add the events to the text
-        for (const event of eventsArray) {
-            text += `* ${event.text} (${event.year})\n`;
+        for (const event of this.onThisDayResponse.slice(0, this.settings.amountOfEvents)) {
+            text += `* ${event.eventdescription}`;
+            if (event.eventyear) {
+                text += ` (${event.eventyear})\n`;
+            } else {
+                text += `\n`;
+            }
         }
 
         return text;
@@ -159,38 +110,29 @@ export default class OnThisDayPlugin extends Plugin {
 
     }
 
-    async getOnThisDayResponse(): Promise<OnThisDayResponse> {
+    async getOnThisDayResponse(): Promise<Array<OnThisDayItem>> {
 
-
-        if (!this.settings.accessToken) {
-            new Notice("Please set your access token in the settings.");
-            return {} as OnThisDayResponse;
-        }
-
-        let today = new Date();
-        let month = String(today.getMonth() + 1).padStart(2, '0');
-        let day = String(today.getDate()).padStart(2, '0');
-        let url = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/${month}/${day}`;
+        const today = new Date();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const url = `https://on-this-day-api.helopsokken.nl/api/v1/events/that-happened-on/${month}/${day}`;
 
         try {
 
-            let response = await requestUrl({
+            const response = await requestUrl({
                 url: url,
                 headers: {
-                    'Api-User-Agent': 'on-this-day-obsidian-plugin (milanvanas+on-this-day-obsidian@gmail.com)',
-                    "Authorization": "Bearer " + this.settings.accessToken,
+                    'Api-User-Agent': 'on-this-day-obsidian-plugin',
                     "Accept": "application/json",
                     "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
                 }
-
             });
 
-            return response.json;
+            return response.json.data as Array<OnThisDayItem>
 
         } catch (error) {
             console.error(error);
-            return {} as OnThisDayResponse;
+            return [] as Array<OnThisDayItem>;
         }
 
 
@@ -219,7 +161,7 @@ export class OnThisDaySettingsTab extends PluginSettingTab {
 
     display(): void {
 
-        let {containerEl} = this;
+        const {containerEl} = this;
 
         containerEl.empty();
 
@@ -256,8 +198,8 @@ export class OnThisDaySettingsTab extends PluginSettingTab {
                             parsedValue = 1;
                         }
 
-                        if (parsedValue > 30) {
-                            parsedValue = 30;
+                        if (parsedValue > 10) {
+                            parsedValue = 10;
                         }
 
                         this.plugin.settings.amountOfEvents = parsedValue;
@@ -279,34 +221,6 @@ export class OnThisDaySettingsTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
-
-        // Dropdown for category
-        containerEl.createEl('h2', {text: 'Categories'});
-        containerEl.createEl('p', {text: 'Select the categories you want to include'});
-        const categories = ['Selected by Wikipedia', 'Births', 'Deaths', 'Events'];
-        const categorySettings = new Map<string, Setting>();
-
-        // @ts-ignore
-        for (const category: Category of categories) {
-            const setting = new Setting(containerEl)
-                .setName(category)
-                .addToggle((toggle) =>
-                    toggle
-                        .setValue(true)
-                        .onChange(async (value) => {
-
-                            // @ts-ignore
-                            this.plugin.settings.categories[category] = value;
-
-                            await this.plugin.saveSettings();
-
-                        })
-                );
-            categorySettings.set(category, setting);
-        }
-
-
-
 
     }
 }
