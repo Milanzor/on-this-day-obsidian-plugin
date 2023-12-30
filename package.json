@@ -1,6 +1,6 @@
 {
 	"name": "on-this-day-obsidian-plugin",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "Simple plugin to fetch On This Day events and insert them into your file. Uses Wikipedia On This Day selected events.",
 	"main": "main.js",
 	"scripts": {

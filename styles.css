@@ -7,6 +7,11 @@ If your plugin does not need CSS, delete this file.
 
 */
 
-.hidden-setting {
-  display: none;
+.reset-to-default-button {
+    float: right;
+}
+
+.reset-to-default-button-confirm-button {
+    /*noinspection CssUnresolvedCustomProperty*/
+    margin-right: var(--size-2-3);
 }
