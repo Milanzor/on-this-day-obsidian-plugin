@@ -1,4 +1,4 @@
-import {App, requestUrl, Editor, moment, Modal, Notice, Plugin, PluginSettingTab, Setting, ButtonComponent} from 'obsidian';
+import {App, ButtonComponent, Editor, Modal, moment, Notice, Plugin, PluginSettingTab, requestUrl, Setting} from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -11,18 +11,20 @@ interface OnThisDayPluginSettings {
 }
 
 interface OnThisDayItem {
-    eventdescription: string;
-    eventtype: string;
-    eventyear: number;
+    description: string;
+    category: string;
+    year: number;
 }
 
 const DEFAULT_SETTINGS: OnThisDayPluginSettings = {
     titleTemplate: "## On this day ({{currentdate}})\n\n",
-    itemTemplate: "* {{eventdescription}} {{if eventyear}}({{eventyear}}){{endif}}\n",
+    itemTemplate: "* {{description}} {{if year}}({{year}}){{endif}}\n",
     amountOfEvents: "3",
     insertTitle: true,
     titleDateFormat: "MMMM Do"
 }
+
+const BASE_URL = "https://onthisday.zwart-hart.nl";
 
 export default class OnThisDayPlugin extends Plugin {
     settings: OnThisDayPluginSettings;
@@ -98,16 +100,16 @@ export default class OnThisDayPlugin extends Plugin {
 
             let eventText = `${this.settings.itemTemplate}`;
 
-            eventText = eventText.replace('{{eventdescription}}', event.eventdescription);
+            eventText = eventText.replace('{{description}}', event.description);
 
-            // Replace everything between {{if eventyear}} and {{endif}} if eventyear is not set
-            if (!event.eventyear) {
-                eventText = eventText.replace(/{{if eventyear}}([\s\S]*?){{endif}}/g, '');
+            // Replace everything between {{if year}} and {{endif}} if year is not set
+            if (!event.year) {
+                eventText = eventText.replace(/{{if year}}([\s\S]*?){{endif}}/g, '');
             }
 
-            eventText = eventText.replace(/{{if eventyear}}/g, '');
+            eventText = eventText.replace(/{{if year}}/g, '');
             eventText = eventText.replace(/{{endif}}/g, '');
-            eventText = eventText.replace('{{eventyear}}', event.eventyear.toString());
+            eventText = eventText.replace('{{year}}', event.year.toString());
 
 
             text += eventText;
@@ -123,7 +125,7 @@ export default class OnThisDayPlugin extends Plugin {
         const today = new Date();
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');
-        const url = `https://on-this-day-api.helopsokken.nl/api/v1/events/that-happened-on/${month}/${day}`;
+        const url = `${BASE_URL}/api/v1/events/that-happened-on/${month}/${day}`;
 
         try {
 
@@ -229,7 +231,7 @@ export class OnThisDaySettingsTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName("Item template")
-            .setDesc("The template that will be used for each item that will be inserted. Use {{eventdescription}} and {{eventyear}} to insert the values. Use {{if eventyear}} and {{endif}} to only show the year if it is set.")
+            .setDesc("The template that will be used for each item that will be inserted. Use {{description}} and {{year}} to insert the values. Use {{if year}} and {{endif}} to only show the year if it is set.")
             .addText((textArea) =>
                 textArea
                     .setPlaceholder(DEFAULT_SETTINGS.itemTemplate)
