@@ -112,7 +112,7 @@ export default class OnThisDayPlugin extends Plugin {
         const today = new Date();
         const month = String(today.getMonth() + 1);
         const day = String(today.getDate());
-        const url = `${BASE_URL}/api/v1/events/that-happened-on/${month}/${day}?category=regular&limit=${this.settings.amountOfEvents}`;
+        const url = `${BASE_URL}/api/v1/events/that-happened-on/${month}/${day}?category=regular`;
 
         try {
 
@@ -260,6 +260,7 @@ class ResetSettingsToDefaultConfirmationModal extends Modal {
     }
 
     onOpen() {
+
         const {contentEl} = this;
 
         contentEl.createEl('h2', {text: 'Are you sure?'});
