@@ -1,14 +1,14 @@
 # On This Day
 
 ## Description
-
-This is a simple plugin that inserts a list of events that happened on this day in history. The events are retrieved from the [Wikipedia API](https://api.wikimedia.org/wiki/Feed_API/Reference/On_this_day).
-
-## Requirements
-
-This plugin requires a Wikimedia Access Token. You can get one [here](https://api.wikimedia.org/wiki/Authentication#Personal_API_tokens).
+Insert events that happened on this day in history.
 
 ## Usage
+Open the command palette and run the `On This Day: Insert` command.
 
-Open the command palette and run the `On This Day` command.
+## Network requests and the event source
+This plugin makes a request to my own API project to get the events, located at https://onthisday.zwart-hart.nl/api/v1/events/that-happend-on/{month}/{day}.
+The API is open source and can be found at https://github.com/Milanzor/on-this-day-api/
+
+
 
