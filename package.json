@@ -1,5 +1,5 @@
 {
-	"name": "on-this-day-obsidian-plugin",
+	"name": "on-this-day",
 	"version": "1.0.3",
 	"description": "Insert events that happened on this day in history.",
 	"main": "main.js",
