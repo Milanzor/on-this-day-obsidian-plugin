@@ -3,9 +3,9 @@
 	"name": "On this day",
 	"version": "1.0.3",
 	"minAppVersion": "0.15.0",
-	"description": "Insert something that happened on this day in history.",
-	"author": "Obsidian",
+	"description": "Insert events that happened on this day in history.",
+	"author": "Milan van As",
 	"authorUrl": "https://github.com/milanzor",
-	"fundingUrl": "https://github.com/sponsors/Milanzor/",
+	"fundingUrl": "https://github.com/sponsors/Milanzor?frequency=one-time&amount=5",
 	"isDesktopOnly": false
 }

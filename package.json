@@ -1,7 +1,7 @@
 {
 	"name": "on-this-day-obsidian-plugin",
 	"version": "1.0.3",
-	"description": "Simple plugin to fetch On This Day events and insert them into your file. Uses Wikipedia On This Day selected events.",
+	"description": "Insert events that happened on this day in history.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
@@ -14,7 +14,7 @@
 		"on this day",
 		"api"
 	],
-	"author": "Milan van As <milanvanas@gmail.com>",
+	"author": "Milan van As",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^16.11.6",

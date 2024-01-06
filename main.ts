@@ -37,31 +37,18 @@ export default class OnThisDayPlugin extends Plugin {
         this.addSettingTab(new OnThisDaySettingsTab(this.app, this));
 
         this.addCommand({
-            id: "insert-on-this-day-text-with-title",
+            id: "on-this-day:insert",
             name: "Insert",
             editorCallback: async (editor: Editor) => {
                 await this.insert(editor);
             },
         });
 
-        this.onThisDayResponse = await this.getOnThisDayResponse();
-
     }
 
     async insert(editor: Editor) {
 
-        if (!this.hasOnThisDayResponse()) {
-
-            this.onThisDayResponse = await this.getOnThisDayResponse();
-
-            if (!this.hasOnThisDayResponse()) {
-                new Notice("Error fetching text for today");
-                return;
-            }
-
-        }
-
-        const onThisDayText = this.getOnThisDayText();
+        const onThisDayText = await this.getOnThisDayText();
 
         // If a selection is made, replace it with the text
         if (editor.somethingSelected()) {
@@ -78,17 +65,17 @@ export default class OnThisDayPlugin extends Plugin {
 
     }
 
-    hasOnThisDayResponse(): boolean {
-        return this.onThisDayResponse.length > 0;
-    }
+    async getOnThisDayText(): Promise<string> {
 
-    getOnThisDayText(): string {
+        const onThisDayResponse = await this.getOnThisDayResponse();
 
-        if (!this.hasOnThisDayResponse()) {
+        if (onThisDayResponse.length === 0) {
+            new Notice("Error fetching text for today");
             return "";
         }
 
         if (this.settings.itemTemplate === "") {
+            new Notice("Item template is empty");
             return "";
         }
 
@@ -96,7 +83,7 @@ export default class OnThisDayPlugin extends Plugin {
 
         text = text.replace('{{currentdate}}', moment().format(this.settings.titleDateFormat));
 
-        for (const event of this.onThisDayResponse.slice(0, parseInt(this.settings.amountOfEvents))) {
+        for (const event of onThisDayResponse.slice(0, parseInt(this.settings.amountOfEvents))) {
 
             let eventText = `${this.settings.itemTemplate}`;
 
@@ -123,9 +110,9 @@ export default class OnThisDayPlugin extends Plugin {
     async getOnThisDayResponse(): Promise<Array<OnThisDayItem>> {
 
         const today = new Date();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        const url = `${BASE_URL}/api/v1/events/that-happened-on/${month}/${day}`;
+        const month = String(today.getMonth() + 1);
+        const day = String(today.getDate());
+        const url = `${BASE_URL}/api/v1/events/that-happened-on/${month}/${day}?category=regular&limit=${this.settings.amountOfEvents}`;
 
         try {
 
